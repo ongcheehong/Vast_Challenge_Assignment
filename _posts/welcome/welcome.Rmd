@@ -1,13 +1,11 @@
 ---
-title: "Welcome to Vast Challenge Assignment"
-description: |
-  Welcome to our new blog, Vast Challenge Assignment. We hope you enjoy 
-  reading what we have to say!
+title: "Welcome to Ong Chee Hong Vast Challenge Assignment"
+description: Welcome to Ong Chee Hong's Vast Challenge 2021 Assignment
 author:
-  - name: Nora Jones 
-    url: https://example.com/norajones
-    affiliation: Spacely Sprockets
-    affiliation_url: https://example.com/spacelysprokets
+  - name: Ong Chee Hong
+    url: https://www.linkedin.com/in/alexongch/
+    affiliation: Singapore Management University - School of Computing and Information Systems
+    affiliation_url: https://scis.smu.edu.sg/
 date: 07-26-2021
 output:
   distill::distill_article:
