@@ -1,0 +1,5 @@
+---
+title: "Vast Challenge Assignment"
+site: distill::distill_website
+listing: posts
+---
