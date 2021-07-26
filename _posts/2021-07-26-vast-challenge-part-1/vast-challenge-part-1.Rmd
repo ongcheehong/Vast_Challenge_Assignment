@@ -4,7 +4,7 @@ description: Welcome to Ong Chee Hong's Vast Challenge 2021 Assignment
 author:
   - name: Ong Chee Hong
     url: https://www.linkedin.com/in/alexongch/
-date: 07-04-2021
+date: 07-26-2021
 output:
   distill::distill_article:
     self_contained: false
