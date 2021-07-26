@@ -396,3 +396,595 @@ Notice that the carid can be selected to see its relationship between other cari
 
 ![](img/network.PNG)
 
+# 4. Answers
+
+### 4.1.  Using just the credit and loyalty card data, identify the most popular locations, and when they are popular. What anomalies do you see? What corrections would you recommend to correct these anomalies? Please limit your answer to 8 images and 300 words.
+
+
+
+As shown previosuly in our data preparation segment, there is a difference in rows (difference of 98 rows) between the cc and loyalty card data. This shows an anomaly that one of the cards were used but not both during purchases which might results in a difference in number of entries.
+
+
+```{r}
+
+glimpse(cc_dtsplit)
+glimpse(loyalty_dt)
+```
+
+As explained previously, the cc and loyalty dataset are similar in nature with just an exception of the last4ccnum and loyaltynum, therefore, a join is required to match rows where the users uses both cc and loyalty card data. However, before a join is performed, we will analyse both the cc and loyalty dataset based on location counts.
+
+
+A first exploratory data analysis by using a bar chart is performed on the cc_dtsplit dataset to find out the location which were patronize the most. 
+
+Based on the bar chart below, we are able to observe that there are 4 locations that are siginificantly higher in visitors than the rest of the locations. The highest is Katerina's cafe with a total of 212 visits followed by Hippokampos, Guys'Gyros and Brew's been served. These four places excluding Hippokampos which is not determinable in the map provided are all restaurants/bars.
+
+
+```{r}
+cc_dtsplit_bar <- cc_dtsplit %>%
+  count(location) %>%
+  mutate(location = fct_reorder(location, n, .desc =TRUE)) %>%
+  plot_ly(x = ~location, y = ~n, marker = list(color = ~n)) %>%
+  add_bars() %>%
+  layout(title = "Total number of visitation by location", xaxis = list(title = ""),yaxis = list(title = "Number of visitors"))
+
+cc_dtsplit_bar
+```
+
+
+
+Next, we will take a look at the loyalty_dt dataset.
+
+Based on the bar chart below, we are able to observe that the 4 locations that were visited mostly are the same four locations that was shown on the cc_dtsplit dataset.
+
+One difference is that *Ouzeri Elian* jumps to the fifth spot which differs from the cc_dtsplit dataset where *Ouzeri Elian* is in the sixth spot.
+
+
+```{r}
+loyalty_dt_bar <- loyalty_dt %>%
+  count(location) %>%
+  mutate(location = fct_reorder(location, n, .desc =TRUE)) %>%
+  plot_ly(x = ~location, y = ~n, marker = list(color = ~n)) %>%
+  add_bars() %>%
+  layout(title = "Total number of visitation by ", xaxis = list(title = ""),yaxis = list(title = "Number of visitors"))
+
+loyalty_dt_bar
+```
+
+
+Next, an inner join will be conducted by joining date, location and price and will will output into a new object *cc_loyalty_join*.
+
+Notice that there are only 1,087 rows wheareas both cc_dtsplit and loyalty_dt has 1490 and 1392 rows respectfully. These shows that some of the data in cc does not match the loyalty data which strengthens the initial anomaly that some of the employees uses one of each card but not both during purchases.
+
+
+```{r}
+cc_loyalty_join <- cc_dtsplit %>%
+  inner_join(loyalty_dt, by = c("date","location", "price"))
+
+cc_loyalty_join
+```
+
+After joining the dataset, we found that there are 1087 rows of data available. This means that some of the credit card purchases are not linked to any of the loyalty card, vice versa, some of the loyalty card are not linked to the credit card purchases. These strengthen the anomaly that we have highlighted before. We will take a look at those datasets that does not match later.
+
+
+Before we begin further analysis on further anomalies between the two datasets. We shall conduct some exploratory data analysis. First, we will analyse the most popular place visited during the duration of study.
+
+To do the above, we will group all the location by the number of visitations. Taking a look at the raw output, we can see that the 4 most visited place is the same four as mentioned previosuly.
+
+
+```{r}
+cc_location_count <- cc_loyalty_join %>%
+  group_by(location) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count))
+
+cc_location_count
+
+```
+
+Next, a bar chart is produced sorted descendingly by the number of visitations.
+
+
+```{r}
+cc_join <- cc_loyalty_join %>%
+  count(location) %>%
+  mutate(location = fct_reorder(location, n, .desc =TRUE)) %>%
+  plot_ly(x = ~location, y = ~n, marker = list(color = ~n)) %>%
+  add_bars(name = "inner-join") %>%
+  layout(title = "Total number of visitation by area", xaxis = list(title = ""),yaxis = list(title = "Number of visitors"))
+
+cc_join
+```
+
+From the chart above, we can observe that *"Katerine"s Cafe" (155 counts)*, *"Guy's Gyros" (121 counts)*, *"Hippokampos" (117 counts)*, *"Brew've Been Serve" (111 counts)* have the most visitation during the period of study. If we take a look closely, the 4th most visited place is actually around 2x the 5th most visited place. This shows that top 4 most visited places takes up most of places visited by patrons. 
+
+
+
+Although we have shown the overall most visited places. However, the more interesting analysis lies in when are the places visited by patrons. As such, we will group the joined data by location, date, day and time to see at which point of time was the location the most.
+
+
+```{r}
+cc_loyalty_group <- cc_loyalty_join %>%
+  group_by(location,date,day,time) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  ungroup()
+
+cc_loyalty_group
+
+```
+
+From the above table we can already observe that "Bean There Done That" was patronized the most at one point of time. Next, are "Guy's Gyros" and "Jack's Magical Beans". Interestingly, "Bean There Done That" has the highest count of high visitation at one point of time.
+
+Next, we will plot a line chart of the restaurant based on count of 3 or more based on a time series line chart to see if there is a trend. The reason to plot 3 or more is to show those location that were highly visited at one point of time.
+
+We will first filter the dataset.
+
+```{r}
+cc_loyalty_top <- cc_loyalty_group %>%
+  filter(count >= 3) %>%
+  ungroup()
+
+```
+
+
+Next, we will create the line chart. 
+
+Based on the most frequented places, we can see that January 13 clock the highest count for one day. Additonally, Bean there done that has clocked the highest visitations per day followed by Jack's Magical Beans.
+
+
+```{r}
+cc_timeseries <- cc_loyalty_top %>%
+  plot_ly(x = ~date, y =~count, color = ~location, hoverinfo = "text",
+          text = ~paste("Location:", location, "<br>","Date:", date, "<br>","Time:", time, "<br>", "Day:", day)) %>%
+  add_lines() %>%
+  add_markers(showlegend = FALSE) %>%
+  layout(title = "Most frequented places by groups of people", xaxis = list(title = "", dtick = ~date, showgrid = FALSE), yaxis = list(title = "Number of people"))
+
+cc_timeseries
+```
+
+
+Next, we will analyse the highest frequented location based on day and time. To do that, we will need to use this unite to combine both day and time together and group the, by location and daytime.
+
+```{r}
+cc_loyalty_day <- cc_loyalty_join %>%
+  unite(col = "daytime", day,time, sep = " ",  remove =FALSE) %>%
+  group_by(location, daytime) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count))
+
+cc_loyalty_day
+```
+
+Next, a bar chart is plotted by filtering out those with more than or equal to 5. From the bar chart, we are able to see that Bean there done that has the highest visitations at a point of time, this is similar to the analysis we did before. The highest is 11 counts on Mon, 12:00H, next is Fri, 12:00H with 11 counts. The nect highest visited location at a point of time is Jack's Magical Beans which clock 7 counts on Mon, 12:00H, followed by Thu, 12:00H of 6 counts.
+
+
+```{r}
+cc_day <- cc_loyalty_day %>%
+  filter(count >=5) %>%
+  plot_ly(x = ~daytime, y = ~count, color = ~location, hoverinfo = "text", text = ~paste("Location:", location, "<br>","Day Time:", daytime, "<br>", "No.of visitors:", count)) %>%
+  add_bars() %>%
+  layout (title = "Total counts of visitors by day and time", xaxis = list(title = "", size = 3, dtick = ~daytime), yaxis = list(title = "Number of visitors") )
+
+cc_day
+
+```
+
+Having completed some EDA by inner joining both cc and loyalty dataset. We will sieve out those dataset that were in cc but not in loyalty. The method to do this is by using anti-join. Anti-join will take out those dataset that does not belongs to the secondary dataset but in the main dataset.
+
+This method is similar to full join therafter sieving those NA values.
+
+From the anti-joined data below, we are able to see that there are 409 rows that were in cc but not in loyalty. This form an anomaly that cc were used in the purchases but not the loyalty card. 
+
+
+```{r}
+cc_loyalty_antijoin <- cc_dtsplit %>%
+  anti_join(loyalty_dt, by = c("date","location", "price"))
+
+
+cc_loyalty_antijoin
+```
+
+Next, we will create a basic bar chart based on the anti join dataset.
+
+Based on the bar chart below, we can see that similar to the inner join dataset, the four locations are Katerina's Cafe, Hippokampos, Brew's been served and Guy's Gyros with the highest count of 59 clock at Katerina's Cafe.
+
+One major difference between this anti joined dataset versus the inner joined is that the descending gradient for each restaurant is not as steep as the inner joined. In the inner joined dataset, the 4th highest visited location is almost 2x the 5th highest visited location. As for the below chart, we can see that the decrement is not that steep.
+
+
+```{r}
+cc_anti <- cc_loyalty_antijoin %>%
+  count(location) %>%
+  mutate(location = fct_reorder(location, n, .desc =TRUE)) %>%
+  plot_ly(x = ~location, y = ~n, marker = list(color = ~n)) %>%
+  add_bars(name = "anti-join") %>%
+  layout(title = "Total number of visitation by area", xaxis = list(title = "", automargin = TRUE),yaxis = list(title = "Number of visitors", automargin = TRUE))
+
+cc_anti
+```
+
+Next, we will group the anti joined dataset to extract the number of visitations at a point of time. Based on the raw grouped data below, we can see that the count of visitations is quite linear with no high variations observed.
+
+
+```{r}
+cc_loyalty_anti_group <- cc_loyalty_antijoin %>%
+  group_by(location, day, date, time) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  ungroup()
+
+cc_loyalty_anti_group
+```
+
+Using the group data, we will create a time-series chart to see the trend throughout the duration of study. We will output those data with count of more than or equal to 2.
+
+Based on the chart below, we can observe that Bean there done that and Jack's Magical Beans at one point has the highest visitations of 3 transactions. The rest of the location are quite constant with 2 transactions.
+
+```{r}
+ cc_anti_timeseries <- cc_loyalty_anti_group %>%
+  filter(count >= 2) %>%
+  plot_ly(x = ~date, y =~count, color = ~location, hoverinfo = "text",
+          text = ~paste("Location:", location, "<br>","Date:", date, "<br>","Time:", time, "<br>", "Day:", day)) %>%
+  add_lines() %>%
+  add_markers(showlegend = FALSE) %>%
+  layout(title = "Most frequented places by groups of people", xaxis = list(title = "", dtick = ~date, showgrid = FALSE), yaxis = list(title = "Number of people"))
+
+cc_anti_timeseries
+```
+
+
+Similar to the above inner joined dataset, we will create a daytime column to observe which daytime has the highest count.
+
+```{r}
+cc_loyalty_day_anti <- cc_loyalty_antijoin %>%
+  unite(col = "daytime", day,time, sep = " ",  remove =FALSE) %>%
+  group_by(location, daytime) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count))
+
+cc_loyalty_day_anti
+```
+
+Based on the chart below, we can see that the highest count per daytime is 5 counts of visitors at Bean there done that which was clocked on Tue, 12:00pm followed by Jack's Magical bean of 4 counts on the same day.  
+
+```{r}
+cc_anti_day <- cc_loyalty_day_anti %>%
+  filter(count >=3) %>%
+  plot_ly(x = ~daytime, y = ~count, color = ~location, hoverinfo = "text", text = ~paste("Location:", location, "<br>","Day Time:", daytime, "<br>", "No.of visitors:", count)) %>%
+  add_bars() %>%
+  layout (title = "Total counts of visitors by day and time", xaxis = list(title = "", size = 3, dtick = ~daytime), automargin = TRUE, yaxis = list(title = "Number of visitors"))
+
+cc_anti_day
+
+```
+
+Next, we will anti join from loyalty to cc.
+
+Based on the anti-joined data, we observe that there are 311 rows of transaction which uses loyalty card with no credit card.
+
+```{r}
+cc_loyalty_antijoin_right <- loyalty_dt%>%
+  anti_join(cc_dtsplit, by = c("date","location", "price")) %>%
+  ungroup()
+
+cc_loyalty_antijoin_right
+
+```
+
+Notice that there is no day after the anti join was performed this is due to the fact that originally, the loyalty_dt dataset does not have the day included. As such, day is being created using the date_weekday_factor function.
+
+
+```{r}
+cc_loyalty_antijoin_mutate <- cc_loyalty_antijoin_right %>%
+  mutate(day = date_weekday_factor(cc_loyalty_antijoin_right$date))
+cc_loyalty_antijoin_mutate
+
+```
+
+Similar to the previous inner join and left anti join data. The four highest visited locations are Katerina's Cafe, Hippokampos, Brew's been served and Guy's Gyros. 
+
+Katerina's Cafe and Hippokampos lead the two most visited location of 42 and 40 respectively.
+
+
+```{r}
+cc_anti_right <- cc_loyalty_antijoin_mutate %>%
+  count(location) %>%
+  mutate(location = fct_reorder(location, n, .desc =TRUE)) %>%
+  plot_ly(x = ~location, y = ~n, marker = list(color = ~n)) %>%
+  add_bars(name = "anti-join-right") %>%
+  layout(title = "Total number of visitation by area", xaxis = list(title = "", automargin = TRUE),yaxis = list(title = "Number of visitors", automargin = TRUE))
+
+cc_anti_right
+```
+
+Next, we will group the right anti joined dataset to get the count per day based on location. 
+
+From the below chart, we can see that Hallowed Grounds have the highest count of 6 visitations on 2014-01-09.
+
+
+```{r}
+cc_loyalty_day_anti_right <- cc_loyalty_antijoin_mutate %>%
+  group_by(location, date,day) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  ungroup()
+
+cc_loyalty_day_anti_right
+```
+
+Next, we will created a bar chart to analyse those visitations of more than or equal to 4 counts. Based on the chart below, we can see that although Hallowed Grounds has the highest visitation at one point, however, it only clock once. This is also considered another anomaly as the count of visitations is not consistent in the dataset provided.
+
+The next highest count of 5 visitations were clocked by Guys's Gyros on 2014-01-15, Hippokampos on 2014-01-10, Katerina's Cafe and Brew's been served on three different occasions.
+
+
+```{r}
+cc_anti_day_right <- cc_loyalty_day_anti_right %>%
+  unite(col = "daydate", day, date, sep = " ", remove = FALSE) %>%
+  filter(count >=4) %>%
+  plot_ly(x = ~daydate, y = ~count, color = ~location, hoverinfo = "text", text = ~paste("Location:", location, "<br>","DayDate:", daydate, "<br>", "No.of visitors:", count)) %>%
+  add_bars() %>%
+  layout (title = "Total counts of visitors by date", xaxis = list(title = "", size = 3, dtick = ~daydate), automargin = TRUE, yaxis = list(title = "Number of visitors"))
+
+cc_anti_day_right
+
+```
+
+Next, we will created a time-series chart to see the trends of visitations to the respective locations.
+
+One more peculiar occurrence can be discovered from the chart below. Brew's Been Served has 5 transactions consecutively for 3 days. However, after which no visits were recorded of Brew've been served for right anti join of more than or equal to 4 transactions.
+
+
+
+```{r}
+ cc_anti_timeseries_right <- cc_loyalty_day_anti_right %>%
+  filter(count >= 4) %>%
+  plot_ly(x = ~date, y =~count, color = ~location, hoverinfo = "text",
+          text = ~paste("Location:", location, "<br>","Date:", date, "<br>", "<br>", "Day:", day)) %>%
+  add_lines() %>%
+  add_markers(showlegend = FALSE) %>%
+  layout(title = "Most frequented places by groups of people", xaxis = list(title = "", dtick = ~date, showgrid = FALSE), yaxis = list(title = "Number of people"))
+
+cc_anti_timeseries_right
+```
+
+Next, we will create a facet grid of all the three joined dataset to analyse everything at one go. To create a facet grid, we will use the subplot function based on the plotly package to create three chart side by side for analysis.
+
+
+
+
+```{r}
+subplot(cc_join, cc_anti, cc_anti_right, nrows = 1, shareX = TRUE, shareY = TRUE)
+
+```
+
+Lastly, we will the cc_loyalty_join dataset with itself by "last4ccnum","location","price", "time", "date" and filter by different loyaltynum. The cc_loyalty dataset is the initial inner join dataset.
+
+Based on the below tibble. We can see that there are 12 instances where there are 6 cc users using different loyaltynum. This is another anomaly that has been found.
+
+
+```{r}
+cc_loyalty_join %>% 
+  inner_join(cc_loyalty_join, by = c("last4ccnum", "location", "price","time", "date")) %>%
+  filter(loyaltynum.x != loyaltynum.y)
+```
+
+
+### 4.2.	Add the vehicle data to your analysis of the credit and loyalty card data. How does your assessment of the anomalies in question 1 change based on this new data? What discrepancies between vehicle, credit, and loyalty card data do you find? Please limit your answer to 8 images and 500 words.
+
+
+
+We will examine the two vehicle related data. Gps and car-assignments data.
+
+The car-assignment data with a total of 44 rows consists of the name and appointment of the employee tag to a CarID. 
+
+The GPS data with a total of 685169 rows consists of the id of the car and its movement based on latitude and longitude with timestamp.
+
+
+```{r}
+glimpse(car_unite)
+glimpse(gps_cleaned)
+```
+
+
+In order for us to match the car assignment person to the gps data. We will inner join the data.
+
+Notice that there is only a total of 613077 dataset. This shows that some of the vehicles recorded are not part of the car_assignment data. I.e. vehicles apart from the car assignees has been tracked too. This phenomena wil be explained in the next section.
+
+
+```{r}
+
+
+gps_car <- gps_cleaned %>%
+  inner_join(car_unite, by = "CarID") 
+
+
+gps_car
+
+```
+
+The car_unite dataset which consists of car assigned to GASTech employees and also truck drivers which have no CarID.
+
+
+```{r}
+DT::datatable(car_unite)
+
+```
+Comparing the above car_unite DT table with the below gps_cleaned table, you will observe that there are vehicle IDs of 101-107. Those are assume to be trucks.
+
+
+```{r}
+DT::datatable(gps_cleaned)
+
+```
+
+
+If we look at the above data, we can see that during one minute, the gps data varies a lot. This tell us that during one minute, the car moves around quite a fair bit.
+
+
+Next, we will anti join both the car and gps datasets to sieve out those vehicle movement that are not part of the car assignees data.
+
+The below dataset will clearly show those CarID of 101-107 which are assume to be trucks.
+
+Going back to the background of this assignment. We will observe that GAStech do provide trucks for official business use. As such, we will assume that those vehicle with CarID of 101 to 107 are trucks. 
+
+These trucks will later be used for examination to see if they were used for personal used.
+
+```{r}
+gps_car_anti <- gps_cleaned %>%
+  anti_join(car_unite, by = "CarID")
+
+gps_car_anti
+```
+
+
+We will revisit the cc_loyalty dataset
+
+
+```{r}
+cc_loyalty_join %>%
+  arrange(timestamp)
+```
+
+
+If we take a look at both the joined dataset of gps_car and cc_loyalty_join data, we will observe that the gps_car data starts at 2014-01-06, 06:28 while the cc_loyalty_join starts at 2014_01_06, 07:28. A difference of an hour. We will observe the 1 hr difference in the later part of our study.
+
+
+
+```{r}
+tail(gps_car,6)
+
+
+```
+
+Next, we will take a look at the last few rows of both joined dataset. We will see that the gps data ends at 2014-01-19, 20:56:00 while the cc_loyalty data stops at 2014-01-19, 20:51:00. There is a difference of 6 mins.
+
+
+```{r}
+tail(cc_loyalty_join, 6)
+
+```
+
+Now, we will filter out those data before 2014-01-06 07:28:00 to take a look at the CarID. First will filter out those data that are before 07:00:00 so that when we plot the bar chart later, it will be visible
+
+
+```{r}
+gps_car_filter <- gps_car %>%
+  filter(Timestamp < "2014-01-06 07:00:00")
+
+gps_car_filter
+```
+
+First, we will group the data by TimeStamp and CarID.
+
+
+```{r}
+gps_car_group <- gps_car_filter %>%
+  group_by(Timestamp, CarID) %>%
+  summarize(count = n()) %>%
+  ungroup() 
+```
+
+Based on the bar chart below, there are 4 CarIDs recorded before 2014-01-06, 07:00:00. The 4 CarIDs are 4,10,19,35 with higher movements from 4 and 35.
+
+```{r}
+gps_car_group %>%
+  plot_ly(x = ~Timestamp, y = ~count, color = ~CarID, hoverinfo = "text",
+          text = ~paste("CarID:", CarID, "<br>","Timestamp:", Timestamp, "<br>", "Count:", count)) %>%
+  add_bars %>%
+  layout(xaxis = list(title  = ""))
+
+```
+
+Next, we will filter out 07:00:00 - 07:12:00.
+```{r}
+gps_car_filter2 <- gps_car %>%
+  filter(Timestamp > "2014-01-06 07:00:00" & Timestamp <= "2014-01-06 07:12:00")
+
+gps_car_filter2
+```
+
+
+```{r}
+gps_car_group2 <- gps_car_filter2 %>%
+  group_by(Timestamp, CarID) %>%
+  summarize(count = n()) %>%
+  ungroup() 
+```
+
+From 07:05:00 to 07:12:00, we can see that 35 has been moving about a lot, together with the earlier recorded movement. 35 who is an executive of GASTEch moves the most. Followed by 7 and 10 which has high amount of movement per minute but only travelled for around 5 mins.
+
+```{r}
+gps_car_group2 %>%
+  plot_ly(x = ~Timestamp, y = ~count, color = ~CarID, hoverinfo = "text",
+          text = ~paste("CarID:", CarID, "<br>","Timestamp:", Timestamp, "<br>", "Count:", count)) %>%
+  add_bars %>%
+  layout(xaxis = list(title  = ""))
+
+
+```
+
+Next, we will filter for 07:12:00 to 07:28:00
+
+
+```{r}
+gps_car_filter3 <- gps_car %>%
+  filter(Timestamp > "2014-01-06 07:12:00" & Timestamp < "2014-01-06 07:28:00")
+
+gps_car_filter3
+```
+
+
+
+```{r}
+gps_car_group3 <- gps_car_filter3 %>%
+  group_by(Timestamp, CarID) %>%
+  summarize(count = n()) %>%
+  ungroup() 
+```
+Similar as before, 35 is still moving about out till 07:27:00 with the highest movement count per minute. 
+
+```{r}
+gps_car_group3 %>%
+  plot_ly(x = ~Timestamp, y = ~count, color = ~as.factor(CarID), hoverinfo = "text",
+          text = ~paste("CarID:", CarID, "<br>","Timestamp:", Timestamp, "<br>", "Count:", count)) %>%
+  add_bars %>%
+  layout(xaxis = list(title  = ""))
+
+
+```
+
+Next, we will examine the last 6 min of the gps dataset
+
+
+```{r}
+gps_car_filter4 <- gps_car %>%
+  filter(Timestamp > "2014-01-19 20:51:00")
+gps_car_filter4
+```
+
+We will see that CarID 30 is the last recorded before the data ceased recording. CarID 30 belongs to the GASTech security manager. 
+
+
+```{r}
+gps_car_group4 <- gps_car_filter4 %>%
+  group_by(Timestamp, CarID) %>%
+  summarize(count = n()) %>%
+  ungroup() 
+
+gps_car_group4
+```
+
+
+```{r}
+cc_gps <- cc_loyalty_join %>%
+  inner_join(gps_car, by = c("timestamp" = "Timestamp"))
+
+cc_gps
+
+```
+
+Notice that when we joined both dataset, we can find several discrepancies in the data, First, at each moment the last4ccnum and loyaltynum is the same. However, the CarID is different. The reason to this is because we simply join the vehicle and purchases dataset by the time stamp. This is wrong as there might be occasion where at the same moment, one person could be moving about but not purchasing anything while the other could be at a shop buying stuff.
+
+
+To resolve this discrepancies. We will need to make use of the map data to find out the actual places based on the lat long data provided. Thus, we will proceed to Question 3.
+
